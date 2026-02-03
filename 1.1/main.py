@@ -2,6 +2,7 @@ import numpy as np
 import scipy.sparse as sp
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
+from euler_methods import approx_wave
 
 c = 1
 L = 1
@@ -99,9 +100,16 @@ def animate(Psi_0):
 
     return
 
+def main():
+    # Psi = integrate(initConditions[1], T_steps=150)
+    # Psi2 = approx_wave(initConditions[1], time_steps=150,
+    #                   mesh_points=x, equations_matrix=D_2,
+    #                   dt=dt, c=c, dx=dx, N=N, method='RK')
+    #
+    # plot(Psi, N_steps=5)
+    # plot(Psi2, N_steps=5)
 
-# Psi = integrate(initConditions[1], T_steps=150)
+    animate(initConditions[2])
 
-# plot(Psi, N_steps=5)
-
-animate(initConditions[2])
+if __name__ == '__main__':
+    main()
