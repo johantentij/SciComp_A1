@@ -1,9 +1,7 @@
 import unittest
 import numpy as np
-from numpy.testing import assert_allclose
 import scipy.sparse as sp
 from euler_methods import approx_wave
-from main import integrate
 
 
 class TestWaveEquation(unittest.TestCase):
@@ -35,11 +33,15 @@ class TestWaveEquation(unittest.TestCase):
         """Check RK method"""
         for i, condition in enumerate(self.initConditions):
             with self.subTest(initCondition=i, condition_name=self.conditions_names[i]):
-                psi_expected = integrate(condition, T_steps=150)
+                psi_expected = approx_wave(
+                    condition, time_steps=150,
+                    mesh_points=self.x, equations_matrix=self.D_2,
+                    dt=self.dt, c=self.c, dx=self.dx, N=self.N, method='SV'
+                )
                 psi_actual = approx_wave(
                     condition, time_steps=150,
                     mesh_points=self.x, equations_matrix=self.D_2,
-                    dt=self.dt, c=self.c, dx=self.dx, N=self.N, method='RK'
+                    dt=self.dt, c=self.c, dx=self.dx, N=self.N, method='RK4'
                 )
 
                 self.assertLess(np.max(np.abs(psi_actual - psi_expected)), 1e-2)
@@ -48,11 +50,49 @@ class TestWaveEquation(unittest.TestCase):
         """Check EF method"""
         for i,condition in enumerate(self.initConditions):
             with self.subTest(initCondition=i, condition_name=self.conditions_names[i]):
-                psi_expected = integrate(condition, T_steps=150)
+                psi_expected = approx_wave(
+                    condition, time_steps=150,
+                    mesh_points=self.x, equations_matrix=self.D_2,
+                    dt=self.dt, c=self.c, dx=self.dx, N=self.N, method='SV'
+                )
                 psi_actual = approx_wave(
                     condition, time_steps=150,
                     mesh_points=self.x, equations_matrix=self.D_2,
                     dt=self.dt, c=self.c, dx=self.dx, N=self.N, method='EF'
+                )
+
+                self.assertLess(np.max(np.abs(psi_actual - psi_expected)), 1e-2)
+
+    def test_LP(self):
+        """Check LP method"""
+        for i,condition in enumerate(self.initConditions):
+            with self.subTest(initCondition=i, condition_name=self.conditions_names[i]):
+                psi_expected = approx_wave(
+                    condition, time_steps=150,
+                    mesh_points=self.x, equations_matrix=self.D_2,
+                    dt=self.dt, c=self.c, dx=self.dx, N=self.N, method='SV'
+                )
+                psi_actual = approx_wave(
+                    condition, time_steps=150,
+                    mesh_points=self.x, equations_matrix=self.D_2,
+                    dt=self.dt, c=self.c, dx=self.dx, N=self.N, method='LP'
+                )
+
+                self.assertLess(np.max(np.abs(psi_actual - psi_expected)), 1e-2)
+
+    def test_SV(self):
+        """Check SV method"""
+        for i,condition in enumerate(self.initConditions):
+            with self.subTest(initCondition=i, condition_name=self.conditions_names[i]):
+                psi_expected = approx_wave(
+                    condition, time_steps=150,
+                    mesh_points=self.x, equations_matrix=self.D_2,
+                    dt=self.dt, c=self.c, dx=self.dx, N=self.N, method='LP'
+                )
+                psi_actual = approx_wave(
+                    condition, time_steps=150,
+                    mesh_points=self.x, equations_matrix=self.D_2,
+                    dt=self.dt, c=self.c, dx=self.dx, N=self.N, method='SV'
                 )
 
                 self.assertLess(np.max(np.abs(psi_actual - psi_expected)), 1e-2)
