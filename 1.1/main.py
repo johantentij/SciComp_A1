@@ -22,8 +22,8 @@ def main():
     D_2 = sp.diags((np.ones(N - 2), -2 * np.ones(N - 1), np.ones(N - 2)), (-1, 0, 1))
 
     Psi = approx_wave(initConditions[2], time_steps=1500,
-                      mesh_points=x, equations_matrix=D_2,
-                      dt=dt, c=c, dx=dx, N=N, method='SV')
+                      equations_matrix=D_2.toarray(),
+                      dt=dt, c=c, dx=dx, N=N, method='RK4')
 
     plot(Psi, x=x, N_steps=5, dt=dt)
 
