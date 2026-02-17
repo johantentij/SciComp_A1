@@ -1,6 +1,7 @@
 import unittest
 import numpy as np
 import scipy.sparse as sp
+from scipy.special import erfc
 from euler_methods import approx_wave
 
 
@@ -27,7 +28,6 @@ class TestWaveEquation(unittest.TestCase):
 
         self.initConditions[2] *= (self.x > .2) & (self.x < .4)
         self.conditions_names =['sin(2πx)', 'sin(5πx)', 'windowed sin(5πx)']
-
 
     def test_RK(self):
         """Check RK method"""
@@ -96,6 +96,17 @@ class TestWaveEquation(unittest.TestCase):
                 )
 
                 self.assertLess(np.max(np.abs(psi_actual - psi_expected)), 1e-2)
+
+class TestHeatEquation(unittest.TestCase):
+    def setUp(self):
+        def analytical(y, t, D=1.0, n_terms=200):
+            if t == 0:
+                return np.zeros_like(y, dtype=float)
+            c = np.zeros_like(y, dtype=float)
+            sqrt2Dt = np.sqrt(2 * D * t)
+            for i in range(n_terms):
+                c += erfc((1 - y + 2 * i) / sqrt2Dt) - erfc((1 + y + 2 * i) / sqrt2Dt)
+            return c
 
 if __name__ == '__main__':
     unittest.main()
