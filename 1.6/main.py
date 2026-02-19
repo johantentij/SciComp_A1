@@ -47,10 +47,16 @@ def sim_obstacle(c, obs_bounds, obs_type):
         
     elif obs_type == 'insulator':
         # set the edge of the insulator the same as adjacent fluid node
-        c[xs:xe, ys]   = c[xs:xe, ys - 1]  # botton
-        c[xs:xe, ye-1] = c[xs:xe, ye]      # top
-        c[xs, ys:ye]   = c[xs - 1, ys:ye]  # left
-        c[xe-1, ys:ye] = c[xe, ys:ye]      # right
+        c[xs, ys:ye] = c[xs-1, ys:ye]
+
+        # Right boundary
+        c[xe-1, ys:ye] = c[xe, ys:ye]
+
+        # Bottom boundary
+        c[xs:xe, ys] = c[xs:xe, ys-1]
+
+        # Top boundary
+        c[xs:xe, ye-1] = c[xs:xe, ye]
 
 
 def solve_diffusion(N, omega, obs_type='none'):
@@ -61,15 +67,18 @@ def solve_diffusion(N, omega, obs_type='none'):
     red_mask, black_mask = get_red_black_masks(N, obs_bounds, obs_type)
     
     for step in range(1, max_iters + 1):
+        sim_obstacle(c, obs_bounds, obs_type)
         c_old = c.copy()
         
+    
+
         # Vectorized updates using NumPy roll for parallelized neighbor access
         for mask in [red_mask, black_mask]:
             neighbors = (np.roll(c, 1, axis=0) + np.roll(c, -1, axis=0) + 
                          np.roll(c, 1, axis=1) + np.roll(c, -1, axis=1))
             c[mask] = (1 - omega) * c[mask] + 0.25 * omega * neighbors[mask]
             
-        sim_obstacle(c, obs_bounds, obs_type)
+        
         
         # check for convergence
         max_error = np.max(np.abs(c - c_old))
@@ -104,11 +113,11 @@ def question_j():
     plt.tight_layout()
     plt.show()
     
+    print(f"best omega value: Omega={best_omega:.2f}")
+
     return best_omega
 
 def question_k(optimal_omega):
-
-    print(f"best omega value: Omega={optimal_omega:.2f}")
     
     conditions = ['none', 'sink', 'insulator']
     labels = ['Baseline (No Obstacle)', 'Task K (Sink)', 'Task L (Insulator)']
@@ -123,7 +132,7 @@ def question_k(optimal_omega):
     
     for i, ax in enumerate(axes):
         c_matrix, iters = results[i]
-        im = ax.contourf(X, Y, c_matrix, levels=20, cmap="inferno", vmin=0, vmax=1)
+        im = ax.pcolor(X, Y, c_matrix, cmap="inferno", vmin=0, vmax=1)
         ax.set_title(f"{labels[i]}\nConverged in {iters} iters")
         ax.set_aspect("equal")
         if i > 0:
@@ -134,5 +143,5 @@ def question_k(optimal_omega):
     plt.show()
     
 if __name__ == "__main__":
-    best_omega = question_j()
-    question_k(best_omega)
+    # best_omega = question_j()
+    question_k(1.8)

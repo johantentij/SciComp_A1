@@ -44,7 +44,7 @@ def solve_steady_state_3d(N=50, omega=1.7, N_iter=2000, tol=10e-5, save_every=5,
 
     # Define Sink
     if sink_slice:
-        c_current[sink_slice] = 1.0
+        c_current[sink_slice] = 0
 
     # 2. PREPARE STORAGE
     history = [c_current.copy()]
@@ -91,11 +91,28 @@ def solve_steady_state_3d(N=50, omega=1.7, N_iter=2000, tol=10e-5, save_every=5,
         if sink_slice:
             c_current[sink_slice] = 0.0
 
+        # if insul_slice:
+        #     # For a simple rectangular block, we can set the internal values
+        #     # to the average of the neighbors outside to simulate the 'no-flow' boundary
+        #     c_current[insul_slice] = 0.25 * (c_left[insul_slice] + c_right[insul_slice] +
+        #                                      c_up[insul_slice] + c_down[insul_slice])
+
         if insul_slice:
-            # For a simple rectangular block, we can set the internal values
-            # to the average of the neighbors outside to simulate the 'no-flow' boundary
-            c_current[insul_slice] = 0.25 * (c_left[insul_slice] + c_right[insul_slice] +
-                                             c_up[insul_slice] + c_down[insul_slice])
+            xs, xe = insul_slice[0].start, insul_slice[0].stop
+            ys, ye = insul_slice[1].start, insul_slice[1].stop
+
+            # Left face
+            c_current[xs, ys:ye] = c_current[xs-1, ys:ye]
+
+            # Right face
+            c_current[xe-1, ys:ye] = c_current[xe, ys:ye]
+
+            # Bottom face
+            c_current[xs:xe, ys] = c_current[xs:xe, ys-1]
+
+            # Top face
+            c_current[xs:xe, ye-1] = c_current[xs:xe, ye]
+
 
         # 5. SAVE PERIODICALLY
         if i % save_every == 0:
@@ -114,7 +131,8 @@ def solve_steady_state_3d(N=50, omega=1.7, N_iter=2000, tol=10e-5, save_every=5,
 
 
 # Example usage:
-c_3d, saved_iterations = solve_steady_state_3d()#insul_slice=(slice(20,25),slice(20,25)))
+c_3d, saved_iterations = solve_steady_state_3d(insul_slice=(slice(20,25),slice(20,25)))
+
 time_steps = len(saved_iterations)
 
 # Snapshot helper: index directly into 3D matrix
