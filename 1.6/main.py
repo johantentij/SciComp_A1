@@ -88,24 +88,86 @@ def solve_diffusion(N, omega, obs_type='none'):
     return c, max_iters
 
 
-def question_j():
+def question_j(gridMin=10, gridMax=200, gridSteps=20):
+    gridSizes = np.linspace(gridMin, gridMax, gridSteps, dtype=np.int32)
     omegas = np.arange(1, 2.01, 0.05)
-    iterations = []
+
+    #omega search resolution
+    omegaStep = .0005
+
+    bestOmegas = np.empty(gridSteps)
     
+    # estimate best omega for gridMin
+    iterations = []
+    for w in omegas:
+        _, iters = solve_diffusion(gridMin, w)
+        iterations.append(iters)
+    
+    prevBestOmega = omegas[np.argmin(iterations)]
+
+    for i, gridSize in enumerate(gridSizes):
+        # start from optimal value of previous grid size
+        w = prevBestOmega
+        _, iterations = solve_diffusion(gridSizes[i], w)
+
+        # decide left or right
+        _, iterations_left = solve_diffusion(gridSize, w-omegaStep)
+        _, iterations_right = solve_diffusion(gridSize, w+omegaStep)
+
+        if (iterations_right > iterations and iterations_left > iterations):
+            # starting value was optimal
+            bestOmegas[i] = w
+
+        elif (iterations_left < iterations_right):
+            iterations_prev = iterations
+            iterations = iterations_left
+            # lower omega until minimum is found
+            w -= omegaStep
+            while (iterations <= iterations_prev):
+                iterations_prev = iterations
+                w -= omegaStep
+                _, iterations = solve_diffusion(gridSize, w)
+
+            bestOmegas[i] = w + omegaStep
+
+        else:
+            iterations_prev = iterations
+            iterations = iterations_right
+            # raise omega until minimum is found
+            w += omegaStep
+            while (iterations <= iterations_prev):
+                iterations_prev = iterations
+                w += omegaStep
+                _, iterations = solve_diffusion(gridSize, w)
+
+            bestOmegas[i] = w - omegaStep
+
+        print("Grid size %d, best omega: %f" % (gridSize, bestOmegas[i]))
+        prevBestOmega = bestOmegas[i]
+
+
+    plt.figure(figsize=(8, 5))
+    plt.plot(gridSizes, bestOmegas)
+    plt.xlabel("grid size")
+    plt.ylabel("Optimal $\\omega$")
+    
+    # example case with base grid size
+    iterations = []
+        
     for w in omegas:
         _, iters = solve_diffusion(grid_size, omega=w, obs_type='none')
         iterations.append(iters)
         print(f"Omega: {w:.2f} | Iterations: {iters}")
         
     optimal_idx = np.argmin(iterations)
-    best_omega = omegas[optimal_idx]
-    
+    best_omega= omegas[optimal_idx]
+
     plt.figure(figsize=(8, 5))
     plt.plot(omegas, iterations, 'ko-', linewidth=2, markersize=6)
     plt.axvline(best_omega, color='r', linestyle='--', label=f'Optimal: {best_omega:.2f}')
     
     plt.yscale('log')
-    plt.title('Convergence Speed vs. Relaxation Factor ($\omega$)')
+    plt.title('N = ' + str(grid_size))
     plt.xlabel('Relaxation Factor ($\omega$)')
     plt.ylabel('Iterations to Converge (Log Scale)')
     plt.grid(True, which="both", ls="--", alpha=0.5)
@@ -143,5 +205,5 @@ def question_k(optimal_omega):
     plt.show()
     
 if __name__ == "__main__":
-    # best_omega = question_j()
-    question_k(1.8)
+    best_omega = question_j()
+    # question_k(1.8)
