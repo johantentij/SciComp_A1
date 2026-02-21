@@ -1,17 +1,36 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from numba import njit
 
-D = 1
-N = 100
-
+N = 50
 dx = 1 / N
 
-c = np.zeros((N, N + 1), dtype=np.float64)
-c[:, N] = 1
+x = np.arange(N) * dx
+y = np.arange(N + 1) * dx
 
-def Jacobi(c, N_iter=10000):
-    for _ in range(N_iter):
+X, Y = np.ogrid[:N, :N + 1]
+is_even = (X + Y) % 2 == 0
+
+red_mask = is_even.copy()
+black_mask = ~is_even
+
+# Exclude top and bottom fixed boundaries
+red_mask[:, 0] = red_mask[:, N] = False
+black_mask[:, 0] = black_mask[:, N] = False
+
+def initC():
+    c = np.zeros((N, N + 1), dtype=np.float64)
+    c[:, N] = 1
+
+    return c
+
+def analyticalSolution():
+    return np.outer(np.ones(N), y)
+
+def Jacobi(c, tol=1e-5):
+    maxDiff = 1
+
+    maxDiffHist = []
+    while maxDiff > tol:
         c_old = np.copy(c)
 
         c_left = np.roll(c_old, 1, axis=0)
@@ -24,56 +43,71 @@ def Jacobi(c, N_iter=10000):
             c_old[:, 2:N+1]
         )
 
-    return c
+        maxDiff = np.max(np.abs(c - c_old))
+        maxDiffHist.append(maxDiff)
 
-@njit
-def Gauss_Seidel(c, N_iter=5000):
-    for _ in range(N_iter):
-        for y in range(1, N):
-            y_down = y - 1
-            y_up = y + 1
+    return c, maxDiffHist
 
-            for x in range(N):
-                x_left = (x - 1) % N
-                x_right = (x + 1) % N
+def SOR(c, omega, tol=1e-5):
+    maxDiff = 1
 
-                c[x, y] = .25 * (
-                    c[x_left, y] + 
-                    c[x_right, y] + 
-                    c[x, y_up] + 
-                    c[x, y_down]
-                )
+    maxDiffHist = []
+    while maxDiff > tol:
+        c_old = c.copy()
+            
+        for mask in [red_mask, black_mask]:
+            neighbors = (
+                np.roll(c, 1, axis=0) + 
+                np.roll(c, -1, axis=0) + 
+                np.roll(c, 1, axis=1) + 
+                np.roll(c, -1, axis=1)
+            )
 
-    return c
+            c[mask] = (1 - omega) * c[mask] + 0.25 * omega * neighbors[mask]
+        
+        maxDiff = np.max(np.abs(c - c_old))
+        maxDiffHist.append(maxDiff)
 
-@njit
-def SOR(c, omega=1.8, N_iter=500):
-    for _ in range(N_iter):
-        for y in range(1, N):
-            y_down = y - 1
-            y_up = y + 1
+    return c, maxDiffHist
 
-            for x in range(N):
-                x_left = (x - 1) % N
-                x_right = (x + 1) % N
+def Gauss_Seidel(c, tol=1e-5):
+    # Gauss-Seidel as special case of SOR:
+    return SOR(c, omega=1, tol=tol)
 
-                c[x, y] = .25 * omega * (
-                    c[x_left, y] + 
-                    c[x_right, y] + 
-                    c[x, y_up] + 
-                    c[x, y_down]
-                ) + (1 - omega) * c[x, y]
+def questionI():
+    fig, (ax1, ax2) = plt.subplots(1, 2)
 
-    return c
+    _, maxDiffHist_Jacobi = Jacobi(initC())
+    ax1.plot(maxDiffHist_Jacobi)
+    ax1.set_yscale('log')
+    ax1.grid(True, which="both", ls="--", alpha=0.5)
+    ax1.set_xlabel("No. of iteration")
+    ax1.set_ylabel("$\\delta$")
+    ax1.set_title("Jacobi")
 
-x = np.arange(N) * dx
-y = np.arange(N + 1) * dx
+    omegas = [.5, 1, 1.5, 1.8, 1.9]
+    for omega in omegas:
+        _, maxDiffHist_SOR = SOR(initC(), omega)
 
-c_solved = SOR(c)
+        if (omega == 1):
+            ax2.plot(maxDiffHist_SOR, label=f"$\\omega = ${omega:.2f} (Gauss-Seidel)")
 
-# plt.pcolor(x, y, c_solved.T)
-plt.plot(y, c_solved[0, :])
-plt.show()
+        else:
+            ax2.plot(maxDiffHist_SOR, label=f"$\\omega = ${omega:.2f}")
+
+    ax2.set_yscale('log')
+    ax2.grid(True, which="both", ls="--", alpha=0.5)
+    ax2.set_xlabel("No. of iteration")
+    ax2.set_ylabel("$\\delta$")
+    ax2.set_title("SOR and Gauss-Seidel")
+    ax2.legend()
+
+    plt.tight_layout()
+    plt.show()
+
+    return
+
+questionI()
 
 
 
