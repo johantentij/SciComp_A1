@@ -6,78 +6,131 @@ grid_size = 50
 tol = 1e-5
 max_iters = 50000
 
-def initialize_grid(N):
-    c = np.zeros((N, N + 1))
-    c[:, N] = 1
-    return c
+class Grid:
+    def __init__(self, N=grid_size):
+        self.N = N
+        self.resize(N, force=True)
 
-def get_red_black_masks(N, obs_bounds, obs_type):
-    """
-    Generate boolean masks for Red-Black parallelized updates.
-    Excludes boundaries and internal obstacle regions to prevent overwriting.
-    """
-    X, Y = np.ogrid[:N, :N + 1]
-    is_even = (X + Y) % 2 == 0
+        return
+
+    def resize(self, N, force=False):
+        if (self.N == N and not force):
+            return
+
+        self.N = N
+
+        X, Y = np.ogrid[:N, :N + 1]
+        is_even = (X + Y) % 2 == 0
+
+        self.red_mask = is_even.copy()
+        self.black_mask = ~is_even
+
+        self.red_mask[:, 0] = self.red_mask[:, N] = False
+        self.black_mask[:, 0] = self.black_mask[:, N] = False
+
+        self.sinks = []
+        self.insulators = []
+
+        return
     
-    red_mask = is_even.copy()
-    black_mask = ~is_even
+    def removeObstacles(self):
+        self.resize(self.N, force=True)
     
-    # Exclude top and bottom fixed boundaries
-    red_mask[:, 0] = red_mask[:, N] = False
-    black_mask[:, 0] = black_mask[:, N] = False
-    
-    # Exclude internal obstacle region from standard SOR updates
-    if obs_type in ['sink', 'insulator']:
-        xs, xe, ys, ye = obs_bounds
-        red_mask[xs:xe, ys:ye] = False
-        black_mask[xs:xe, ys:ye] = False
+    def addRectObstacle(self, xy_start, xy_end, obstacleType):
+        xs, ys = xy_start
+        xe, ye = xy_end
+
+        xs = int(self.N * xs)
+        xe = int(self.N * xe)
+        ys = int(self.N * ys)
+        ye = int(self.N * ye)
+
+        if (obstacleType == 'sink'):
+            self.sinks.append((xs, xe, ys, ye))
+
+        elif (obstacleType == 'insulator'):
+            self.insulators.append((xs, xe, ys, ye))
+
+        else:
+            return False
         
-    return red_mask, black_mask
+        self.red_mask[xs:xe, ys:ye] = False
+        self.black_mask[xs:xe, ys:ye] = False
 
-def sim_obstacle(c, obs_bounds, obs_type):
-    if obs_type != 'none':
-        # both sink and insulator get internal temperature 0
-
-        xs, xe, ys, ye = obs_bounds 
-        c[xs:xe, ys:ye] = 0.0
-
-
-def solve_diffusion(N, omega, obs_type='none', obs_bounds=(.3, .7, .3, .7)):
-    c = initialize_grid(N)
+        return True
     
-    obs_bounds = (
-        int(N * obs_bounds[0]), 
-        int(N * obs_bounds[1]), 
-        int((N+1) * obs_bounds[2]), 
-        int((N+1) * obs_bounds[3])
-    )
-    red_mask, black_mask = get_red_black_masks(N, obs_bounds, obs_type)
+    def getNeighbours(self, c):
+        left    = np.roll(c, -1, axis=0)
+        right   = np.roll(c, 1, axis=0)
+        up      = np.roll(c, -1, axis=1)
+        down    = np.roll(c, 1, axis=1)
+
+        for insulator in self.insulators:
+            xs, xe, ys, ye = insulator
+
+            left[xe, ys:ye]     += c[xe, ys:ye]
+            right[xs-1, ys:ye]  += c[xs-1, ys:ye]
+            up[xs:xe, ye]       += c[xs:xe, ye]
+            down[xs:xe, ys-1]   += c[xs:xe, ys-1]
+
+        return left, right, up, down
+    
+    def getObstaclePlotRects(self):
+        dx = 1 / self.N
+
+        x = np.arange(self.N) * dx
+        y = np.arange(self.N + 1) * dx
+
+        rects = []
+        for insulator in self.insulators:
+            xs, xe, ys, ye = insulator
+            rects.append(
+                plt.Rectangle(
+                    (x[xs] - .5 * dx, y[ys] - .5 * dx), 
+                    x[xe] - x[xs], 
+                    y[ye] - y[ys], 
+                    fill=False, 
+                    color='white', 
+                    hatch='x',
+                    ls = ''
+                    )
+                ) 
+
+        for sink in self.sinks:
+            xs, xe, ys, ye = sink
+            rects.append(
+                plt.Rectangle(
+                    (x[xs] - .5 * dx, y[ys] - .5 * dx), 
+                    x[xe] - x[xs], 
+                    y[ye] - y[ys], 
+                    fill=False, 
+                    color='red', 
+                    hatch='x',
+                    ls = ''
+                )
+            ) 
+
+        return rects
+    
+    def initC(self):
+        c = np.zeros((self.N, self.N + 1))
+        c[:, self.N] = 1
+
+        return c
+
+def solve_diffusion(gridObject: Grid, N, omega):
+    gridObject.resize(N)
+    c = gridObject.initC()
     
     for step in range(1, max_iters + 1):
-        sim_obstacle(c, obs_bounds, obs_type)
         c_old = c.copy()
         
-        
-        for mask in [red_mask, black_mask]:
-            neighbors = (
-                np.roll(c, 1, axis=0) + 
-                np.roll(c, -1, axis=0) + 
-                np.roll(c, 1, axis=1) + 
-                np.roll(c, -1, axis=1)
-            )
+        for mask in [gridObject.red_mask, gridObject.black_mask]:
+            left, right, up, down = gridObject.getNeighbours(c)
+            neighbourSum = left + right + up + down
 
-            # hacky but OK
-            if (obs_type == 'insulator'):
-                xs, xe, ys, ye = obs_bounds
-
-                # internal values are set to zero, so they don't add anything to neighbors
-                # but they're supposed to be equal to the neighbors, so manually add them:
-                neighbors[xs-1, ys:ye] += c[xs-1, ys:ye]
-                neighbors[xe, ys:ye] += c[xe, ys:ye]
-                neighbors[xs:xe, ys-1] += c[xs:xe, ys-1]
-                neighbors[xs:xe, ye] += c[xs:xe, ye]
-
-            c[mask] = (1 - omega) * c[mask] + 0.25 * omega * neighbors[mask]
+            c[mask] *= (1 - omega)
+            c[mask] += .25 * omega * neighbourSum[mask]
         
         # check for convergence
         max_error = np.max(np.abs(c - c_old))
@@ -88,6 +141,8 @@ def solve_diffusion(N, omega, obs_type='none', obs_bounds=(.3, .7, .3, .7)):
 
 
 def question_j(gridMin=10, gridMax=200, gridSteps=20):
+    gridObject = Grid(gridMin)
+
     gridSizes = np.linspace(gridMin, gridMax, gridSteps, dtype=np.int32)
     omegas = np.arange(1.7, 2, 0.005)
 
@@ -99,7 +154,7 @@ def question_j(gridMin=10, gridMax=200, gridSteps=20):
     # estimate best omega for gridMin
     iterations = []
     for w in omegas:
-        _, iters = solve_diffusion(gridMin, w)
+        _, iters = solve_diffusion(gridObject, gridMin, w)
         iterations.append(iters)
     
     prevBestOmega = omegas[np.argmin(iterations)]
@@ -107,11 +162,11 @@ def question_j(gridMin=10, gridMax=200, gridSteps=20):
     for i, gridSize in enumerate(gridSizes):
         # start from optimal value of previous grid size
         w = prevBestOmega
-        _, iterations = solve_diffusion(gridSizes[i], w)
+        _, iterations = solve_diffusion(gridObject, gridSizes[i], w)
 
         # decide left or right
-        _, iterations_left = solve_diffusion(gridSize, w-omegaStep)
-        _, iterations_right = solve_diffusion(gridSize, w+omegaStep)
+        _, iterations_left = solve_diffusion(gridObject, gridSize, w-omegaStep)
+        _, iterations_right = solve_diffusion(gridObject, gridSize, w+omegaStep)
 
         if (iterations_right > iterations and iterations_left > iterations):
             # starting value was optimal
@@ -125,7 +180,7 @@ def question_j(gridMin=10, gridMax=200, gridSteps=20):
             while (iterations <= iterations_prev):
                 iterations_prev = iterations
                 w -= omegaStep
-                _, iterations = solve_diffusion(gridSize, w)
+                _, iterations = solve_diffusion(gridObject, gridSize, w)
 
             bestOmegas[i] = w + omegaStep
 
@@ -137,7 +192,7 @@ def question_j(gridMin=10, gridMax=200, gridSteps=20):
             while (iterations <= iterations_prev):
                 iterations_prev = iterations
                 w += omegaStep
-                _, iterations = solve_diffusion(gridSize, w)
+                _, iterations = solve_diffusion(gridObject, gridSize, w)
 
             bestOmegas[i] = w - omegaStep
 
@@ -155,7 +210,7 @@ def question_j(gridMin=10, gridMax=200, gridSteps=20):
     iterations = []
         
     for w in omegas:
-        _, iters = solve_diffusion(grid_size, omega=w, obs_type='none')
+        _, iters = solve_diffusion(gridObject, grid_size, omega=w)
         iterations.append(iters)
         print(f"Omega: {w:.2f} | Iterations: {iters}")
         
@@ -180,48 +235,75 @@ def question_j(gridMin=10, gridMax=200, gridSteps=20):
     return best_omega
 
 def question_k(optimal_omega):
-    obs_bounds=(.2, .8, .4, .6)
+    gridObject = Grid()
 
     conditions = ['none', 'sink', 'insulator']
     labels = ['Baseline (No Obstacle)', 'Task K (Sink)', 'Task L (Insulator)']
-    results = []
-    
-    for cond in conditions:
-        c, iters = solve_diffusion(grid_size, optimal_omega, obs_type=cond, obs_bounds=obs_bounds)
-        results.append((c, iters))
-        
+
     fig, axes = plt.subplots(1, 3, figsize=(16, 5))
-    X, Y = np.meshgrid(np.linspace(0, 1, grid_size), np.linspace(0, 1, grid_size+1), indexing='ij')
 
     dx = 1 / grid_size
-    dy = 1 / (grid_size - 1)
-
-    obs_bounds = (
-        int(grid_size * obs_bounds[0]), 
-        int(grid_size * obs_bounds[1]), 
-        int((grid_size+1) * obs_bounds[2]), 
-        int((grid_size+1) * obs_bounds[3])
-    )
     
-    for i, ax in enumerate(axes):
-        c_matrix, iters = results[i]
-        im = ax.pcolor(X, Y, c_matrix, cmap="inferno", vmin=0, vmax=1)
+    x = np.arange(grid_size) * dx
+    y = np.arange(grid_size + 1) * dx
+    
+    for i, cond in enumerate(conditions):
+        gridObject.removeObstacles()
+        gridObject.addRectObstacle((.2, .4), (.8, .6), cond)
+
+        c, iters = solve_diffusion(gridObject, grid_size, optimal_omega)
+
+        ax = axes[i]
+        im = ax.pcolor(x, y, c.T, cmap="inferno", vmin=0, vmax=1)
         ax.set_title(f"{labels[i]}\nConverged in {iters} iters")
         ax.set_aspect("equal")
-        if i > 0:
-            rect = plt.Rectangle(
-                (X[obs_bounds[0], 0] - .5 * dx, Y[0, obs_bounds[2]] - .5 * dy), 
-                X[obs_bounds[1], 0] - X[obs_bounds[0], 0], 
-                Y[0, obs_bounds[3]] - Y[0, obs_bounds[2]], 
-                fill=False, 
-                color='white', 
-                ls='--'
-            )
+
+        rects = gridObject.getObstaclePlotRects()
+        for rect in rects:
             ax.add_patch(rect)
 
     plt.colorbar(im, ax=axes.ravel().tolist(), fraction=0.02, pad=0.04)
+
+    # plt.tight_layout()
+    plt.show()
+
+    return
+
+def insulatorMazeTest(N=grid_size):
+    gridObject = Grid()
+
+    gridObject.addRectObstacle((.8, .1), (.9, .9), obstacleType='insulator')
+    gridObject.addRectObstacle((.1, .1), (.8, .2), obstacleType='insulator')
+    gridObject.addRectObstacle((.1, .2), (.2, .9), obstacleType='insulator')
+    gridObject.addRectObstacle((.2, .8), (.7, .9), obstacleType='insulator')
+    gridObject.addRectObstacle((.6, .3), (.7, .8), obstacleType='insulator')
+    gridObject.addRectObstacle((.3, .3), (.6, .4), obstacleType='insulator')
+    gridObject.addRectObstacle((.3, .4), (.4, .7), obstacleType='insulator')
+    gridObject.addRectObstacle((.4, .6), (.5, .7), obstacleType='insulator')
+
+    # adding a sink in the centre of the maze makes it converge faster
+    # gridObject.addRectObstacle((.48, .48), (.52, .52), obstacleType='sink')
+
+    c, iters = solve_diffusion(gridObject, N, 1.91)
+
+    dx = 1 / N
+    
+    x = np.arange(N) * dx
+    y = np.arange(N + 1) * dx
+
+    fig, ax = plt.subplots()
+    im = ax.pcolor(x, y, c.T, cmap="inferno", vmin=0, vmax=1)
+    rects = gridObject.getObstaclePlotRects()
+
+    for rect in rects:
+        ax.add_patch(rect)
+    ax.set_title(f"Converged in {iters} iterations")
+
+    plt.colorbar(im, fraction=0.02, pad=0.04)
     plt.show()
     
 if __name__ == "__main__":
-    best_omega = question_j()
-    question_k(1.8)
+    # best_omega = question_j()
+    # question_k(best_omega)
+
+    insulatorMazeTest()
