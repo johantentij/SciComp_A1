@@ -35,50 +35,49 @@ def get_red_black_masks(N, obs_bounds, obs_type):
     return red_mask, black_mask
 
 def sim_obstacle(c, obs_bounds, obs_type):
+    if obs_type != 'none':
+        # both sink and insulator get internal temperature 0
 
-    if obs_type == 'none':
-        return
-        
-    xs, xe, ys, ye = obs_bounds
-    
-    if obs_type == 'sink':
-        # sink absorbs all heat and concentration drops to 0
+        xs, xe, ys, ye = obs_bounds 
         c[xs:xe, ys:ye] = 0.0
-        
-    elif obs_type == 'insulator':
-        # set the edge of the insulator the same as adjacent fluid node
-        c[xs, ys:ye] = c[xs-1, ys:ye]
-
-        # Right boundary
-        c[xe-1, ys:ye] = c[xe, ys:ye]
-
-        # Bottom boundary
-        c[xs:xe, ys] = c[xs:xe, ys-1]
-
-        # Top boundary
-        c[xs:xe, ye-1] = c[xs:xe, ye]
 
 
-def solve_diffusion(N, omega, obs_type='none'):
+def solve_diffusion(N, omega, obs_type='none', obs_bounds=(.3, .7, .3, .7)):
     c = initialize_grid(N)
     
-    # define obstacle size and place
-    obs_bounds = (int(N * 0.4), int(N * 0.6), int((N+1) * 0.4), int((N+1) * 0.6))
+    obs_bounds = (
+        int(N * obs_bounds[0]), 
+        int(N * obs_bounds[1]), 
+        int((N+1) * obs_bounds[2]), 
+        int((N+1) * obs_bounds[3])
+    )
     red_mask, black_mask = get_red_black_masks(N, obs_bounds, obs_type)
     
     for step in range(1, max_iters + 1):
         sim_obstacle(c, obs_bounds, obs_type)
         c_old = c.copy()
         
-    
-
-        # Vectorized updates using NumPy roll for parallelized neighbor access
-        for mask in [red_mask, black_mask]:
-            neighbors = (np.roll(c, 1, axis=0) + np.roll(c, -1, axis=0) + 
-                         np.roll(c, 1, axis=1) + np.roll(c, -1, axis=1))
-            c[mask] = (1 - omega) * c[mask] + 0.25 * omega * neighbors[mask]
-            
         
+        for mask in [red_mask, black_mask]:
+            neighbors = (
+                np.roll(c, 1, axis=0) + 
+                np.roll(c, -1, axis=0) + 
+                np.roll(c, 1, axis=1) + 
+                np.roll(c, -1, axis=1)
+            )
+
+            # hacky but OK
+            if (obs_type == 'insulator'):
+                xs, xe, ys, ye = obs_bounds
+
+                # internal values are set to zero, so they don't add anything to neighbors
+                # but they're supposed to be equal to the neighbors, so manually add them:
+                neighbors[xs-1, ys:ye] += c[xs-1, ys:ye]
+                neighbors[xe, ys:ye] += c[xe, ys:ye]
+                neighbors[xs:xe, ys-1] += c[xs:xe, ys-1]
+                neighbors[xs:xe, ye] += c[xs:xe, ye]
+
+            c[mask] = (1 - omega) * c[mask] + 0.25 * omega * neighbors[mask]
         
         # check for convergence
         max_error = np.max(np.abs(c - c_old))
@@ -90,7 +89,7 @@ def solve_diffusion(N, omega, obs_type='none'):
 
 def question_j(gridMin=10, gridMax=200, gridSteps=20):
     gridSizes = np.linspace(gridMin, gridMax, gridSteps, dtype=np.int32)
-    omegas = np.arange(1, 2.01, 0.05)
+    omegas = np.arange(1.7, 2, 0.005)
 
     #omega search resolution
     omegaStep = .0005
@@ -146,10 +145,11 @@ def question_j(gridMin=10, gridMax=200, gridSteps=20):
         prevBestOmega = bestOmegas[i]
 
 
-    plt.figure(figsize=(8, 5))
-    plt.plot(gridSizes, bestOmegas)
-    plt.xlabel("grid size")
-    plt.ylabel("Optimal $\\omega$")
+    fig, (ax1, ax2) = plt.subplots(1 , 2)
+    ax2.plot(gridSizes, bestOmegas)
+    ax2.set_xlabel("Grid size (N)")
+    ax2.set_ylabel("Optimal $\\omega$")
+    ax2.grid(True, which="both", ls="--", alpha=0.5)
     
     # example case with base grid size
     iterations = []
@@ -162,16 +162,16 @@ def question_j(gridMin=10, gridMax=200, gridSteps=20):
     optimal_idx = np.argmin(iterations)
     best_omega= omegas[optimal_idx]
 
-    plt.figure(figsize=(8, 5))
-    plt.plot(omegas, iterations, 'ko-', linewidth=2, markersize=6)
-    plt.axvline(best_omega, color='r', linestyle='--', label=f'Optimal: {best_omega:.2f}')
+    ax1.plot(omegas, iterations, 'ko-', linewidth=2, markersize=3)
+    ax1.axvline(best_omega, color='r', linestyle='--', label=f'Optimal: {best_omega:.2f}')
     
-    plt.yscale('log')
-    plt.title('N = ' + str(grid_size))
-    plt.xlabel('Relaxation Factor ($\omega$)')
-    plt.ylabel('Iterations to Converge (Log Scale)')
-    plt.grid(True, which="both", ls="--", alpha=0.5)
-    plt.legend()
+    ax1.set_yscale('log')
+    ax1.set_title('N = ' + str(grid_size))
+    ax1.set_xlabel('Relaxation Factor ($\\omega$)')
+    ax1.set_ylabel('No. of iterations until convergence')
+    ax1.grid(True, which="both", ls="--", alpha=0.5)
+    ax1.legend()
+
     plt.tight_layout()
     plt.show()
     
@@ -180,17 +180,28 @@ def question_j(gridMin=10, gridMax=200, gridSteps=20):
     return best_omega
 
 def question_k(optimal_omega):
-    
+    obs_bounds=(.2, .8, .4, .6)
+
     conditions = ['none', 'sink', 'insulator']
     labels = ['Baseline (No Obstacle)', 'Task K (Sink)', 'Task L (Insulator)']
     results = []
     
     for cond in conditions:
-        c, iters = solve_diffusion(grid_size, optimal_omega, obs_type=cond)
+        c, iters = solve_diffusion(grid_size, optimal_omega, obs_type=cond, obs_bounds=obs_bounds)
         results.append((c, iters))
         
     fig, axes = plt.subplots(1, 3, figsize=(16, 5))
     X, Y = np.meshgrid(np.linspace(0, 1, grid_size), np.linspace(0, 1, grid_size+1), indexing='ij')
+
+    dx = 1 / grid_size
+    dy = 1 / (grid_size - 1)
+
+    obs_bounds = (
+        int(grid_size * obs_bounds[0]), 
+        int(grid_size * obs_bounds[1]), 
+        int((grid_size+1) * obs_bounds[2]), 
+        int((grid_size+1) * obs_bounds[3])
+    )
     
     for i, ax in enumerate(axes):
         c_matrix, iters = results[i]
@@ -198,7 +209,14 @@ def question_k(optimal_omega):
         ax.set_title(f"{labels[i]}\nConverged in {iters} iters")
         ax.set_aspect("equal")
         if i > 0:
-            rect = plt.Rectangle((0.4, 0.4), 0.2, 0.2, fill=False, color='white', ls='--')
+            rect = plt.Rectangle(
+                (X[obs_bounds[0], 0] - .5 * dx, Y[0, obs_bounds[2]] - .5 * dy), 
+                X[obs_bounds[1], 0] - X[obs_bounds[0], 0], 
+                Y[0, obs_bounds[3]] - Y[0, obs_bounds[2]], 
+                fill=False, 
+                color='white', 
+                ls='--'
+            )
             ax.add_patch(rect)
 
     plt.colorbar(im, ax=axes.ravel().tolist(), fraction=0.02, pad=0.04)
@@ -206,4 +224,4 @@ def question_k(optimal_omega):
     
 if __name__ == "__main__":
     best_omega = question_j()
-    # question_k(1.8)
+    question_k(1.8)
