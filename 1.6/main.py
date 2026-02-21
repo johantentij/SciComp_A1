@@ -60,18 +60,18 @@ class Grid:
         return True
     
     def getNeighbours(self, c):
-        left    = np.roll(c, -1, axis=0)
-        right   = np.roll(c, 1, axis=0)
-        up      = np.roll(c, -1, axis=1)
-        down    = np.roll(c, 1, axis=1)
+        left    = np.roll(c, 1, axis=0)
+        right   = np.roll(c, -1, axis=0)
+        up      = np.roll(c, 1, axis=1)
+        down    = np.roll(c, -1, axis=1)
 
         for insulator in self.insulators:
             xs, xe, ys, ye = insulator
 
-            left[xe, ys:ye]     += c[xe, ys:ye]
-            right[xs-1, ys:ye]  += c[xs-1, ys:ye]
-            up[xs:xe, ye]       += c[xs:xe, ye]
-            down[xs:xe, ys-1]   += c[xs:xe, ys-1]
+            left[xe, ys:ye]     = c[xe, ys:ye]
+            right[xs-1, ys:ye]  = c[xs-1, ys:ye]
+            up[xs:xe, ye]       = c[xs:xe, ye]
+            down[xs:xe, ys-1]   = c[xs:xe, ys-1]
 
         return left, right, up, down
     
@@ -304,6 +304,6 @@ def insulatorMazeTest(N=grid_size):
     
 if __name__ == "__main__":
     # best_omega = question_j()
-    # question_k(best_omega)
+    # question_k(1.91)
 
     insulatorMazeTest()

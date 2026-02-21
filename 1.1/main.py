@@ -1,7 +1,9 @@
 import numpy as np
 import scipy.sparse as sp
 from euler_methods import approx_wave
-from utils import plot, animate_wave
+from utils import plot, animate_wave, largerPlotFont
+
+largerPlotFont()
 
 def main():
     c = 1
@@ -21,13 +23,13 @@ def main():
 
     D_2 = sp.diags((np.ones(N - 2), -2 * np.ones(N - 1), np.ones(N - 2)), (-1, 0, 1))
 
-    Psi = approx_wave(initConditions[2], time_steps=1500,
+    Psi = approx_wave(initConditions[2], time_steps=150,
                       equations_matrix=D_2.toarray(),
-                      dt=dt, c=c, dx=dx, N=N, method='RK4')
+                      dt=dt, c=c, dx=dx, N=N, method='SV')
 
     plot(Psi, x=x, N_steps=5, dt=dt)
 
-    animate_wave(Psi,x=x, dt=dt)
+    # animate_wave(Psi,x=x, dt=dt)
 
 if __name__ == '__main__':
     main()

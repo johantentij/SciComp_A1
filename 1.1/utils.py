@@ -89,3 +89,15 @@ def animate_wave(psi, x, dt, frame_skip=5, save_path=None):
 
     plt.show()
     return anim
+
+def largerPlotFont():
+    plt.rcParams.update({
+        "font.size": 14,
+        "axes.titlesize": 16,
+        "axes.labelsize": 14,
+        "xtick.labelsize": 12,
+        "ytick.labelsize": 12,
+        "legend.fontsize": 12,
+    })
+
+    return

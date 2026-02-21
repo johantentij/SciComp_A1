@@ -1,6 +1,15 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+plt.rcParams.update({
+    "font.size": 14,
+    "axes.titlesize": 16,
+    "axes.labelsize": 14,
+    "xtick.labelsize": 12,
+    "ytick.labelsize": 12,
+    "legend.fontsize": 12,
+})
+
 N = 50
 dx = 1 / N
 
@@ -129,6 +138,38 @@ def questionH():
 
     return
 
+def question_h(N=50):
+    omega = 1.8
+    
+    c_jac = Jacobi(initC())
+    c_gs = SOR(initC(), omega=1)
+    c_sor = SOR(initC(), omega)
+    
+    y_vals = np.linspace(0, 1, N + 1)
+
+    fig, ax = plt.subplots()
+    
+    # left plot
+    step = 2 
+
+    # right plot: residuals
+    res_jac = np.abs(c_jac[0, :] - y_vals)
+    res_gs = np.abs(c_gs[0, :] - y_vals)
+    res_sor = np.abs(c_sor[0, :] - y_vals)
+    
+    ax.semilogy(y_vals, res_jac, 'o-', markersize=4, label='Jacobi', alpha=0.7)
+    ax.semilogy(y_vals, res_gs, 's-', markersize=4, label='Gauss-Seidel', alpha=0.7)
+    ax.semilogy(y_vals, res_sor, '^-', markersize=4, label=f'SOR ($\omega={omega}$)', alpha=0.7)
+    
+    ax.set_title(f"$|c_{{num}} - c_{{ana}}|$ (N={N})")
+    ax.set_xlabel("y coordinate")
+    ax.set_ylabel("Absolute Error (Log Scale)")
+    ax.legend()
+    ax.grid(True, which='both', ls=':', alpha=0.5)
+
+    plt.tight_layout()
+    plt.show()
+
 def questionI():
     fig, (ax1, ax2) = plt.subplots(1, 2)
 
@@ -157,12 +198,13 @@ def questionI():
     ax2.set_title("SOR and Gauss-Seidel")
     ax2.legend()
 
-    plt.tight_layout()
+    # plt.tight_layout()
     plt.show()
 
     return
 
-questionH()
+# questionH()
+question_h()
 
 
 
