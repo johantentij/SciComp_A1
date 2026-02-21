@@ -26,10 +26,11 @@ def initC():
 def analyticalSolution():
     return np.outer(np.ones(N), y)
 
-def Jacobi(c, tol=1e-5):
+def Jacobi(c, tol=1e-5, returnMaxDiff=False, returnErrors=False):
     maxDiff = 1
 
     maxDiffHist = []
+    errorHist = []
     while maxDiff > tol:
         c_old = np.copy(c)
 
@@ -46,12 +47,23 @@ def Jacobi(c, tol=1e-5):
         maxDiff = np.max(np.abs(c - c_old))
         maxDiffHist.append(maxDiff)
 
-    return c, maxDiffHist
+        #L_2 norm of errors
+        errorHist.append(np.sqrt(np.mean((c - analyticalSolution()) ** 2)))
 
-def SOR(c, omega, tol=1e-5):
+    if returnMaxDiff and returnErrors:
+        return c, maxDiffHist, errorHist
+    elif returnMaxDiff:
+        return c, maxDiffHist
+    elif returnErrors:
+        return c, errorHist
+    else:
+        return c
+
+def SOR(c, omega, tol=1e-5, returnMaxDiff=False, returnErrors=False):
     maxDiff = 1
 
     maxDiffHist = []
+    errorHist = []
     while maxDiff > tol:
         c_old = c.copy()
             
@@ -68,16 +80,59 @@ def SOR(c, omega, tol=1e-5):
         maxDiff = np.max(np.abs(c - c_old))
         maxDiffHist.append(maxDiff)
 
-    return c, maxDiffHist
+        #L_2 norm of errors
+        errorHist.append(np.sqrt(np.mean((c - analyticalSolution()) ** 2)))
+
+    if returnMaxDiff and returnErrors:
+        return c, maxDiffHist, errorHist
+    elif returnMaxDiff:
+        return c, maxDiffHist
+    elif returnErrors:
+        return c, errorHist
+    else:
+        return c
 
 def Gauss_Seidel(c, tol=1e-5):
     # Gauss-Seidel as special case of SOR:
     return SOR(c, omega=1, tol=tol)
 
+def questionH():
+    fig, (ax1, ax2) = plt.subplots(1, 2)
+
+    _, errors_Jacobi = Jacobi(initC(), returnErrors=True)
+    ax1.plot(errors_Jacobi)
+    ax1.set_yscale('log')
+    ax1.grid(True, which="both", ls="--", alpha=0.5)
+    ax1.set_xlabel("No. of iteration")
+    ax1.set_ylabel("$L_2$ norm of errors")
+    ax1.set_title("Jacobi")
+
+    omegas = [.5, 1, 1.5, 1.8, 1.9]
+    for omega in omegas:
+        _, errors_SOR = SOR(initC(), omega, returnErrors=True)
+
+        if (omega == 1):
+            ax2.plot(errors_SOR, label=f"$\\omega = ${omega:.2f} (Gauss-Seidel)")
+
+        else:
+            ax2.plot(errors_SOR, label=f"$\\omega = ${omega:.2f}")
+
+    ax2.set_yscale('log')
+    ax2.grid(True, which="both", ls="--", alpha=0.5)
+    ax2.set_xlabel("No. of iteration")
+    ax2.set_ylabel("$L_2$ norm of errors")
+    ax2.set_title("SOR and Gauss-Seidel")
+    ax2.legend()
+
+    plt.tight_layout()
+    plt.show()
+
+    return
+
 def questionI():
     fig, (ax1, ax2) = plt.subplots(1, 2)
 
-    _, maxDiffHist_Jacobi = Jacobi(initC())
+    _, maxDiffHist_Jacobi = Jacobi(initC(), returnMaxDiff=True)
     ax1.plot(maxDiffHist_Jacobi)
     ax1.set_yscale('log')
     ax1.grid(True, which="both", ls="--", alpha=0.5)
@@ -87,7 +142,7 @@ def questionI():
 
     omegas = [.5, 1, 1.5, 1.8, 1.9]
     for omega in omegas:
-        _, maxDiffHist_SOR = SOR(initC(), omega)
+        _, maxDiffHist_SOR = SOR(initC(), omega, returnMaxDiff=True)
 
         if (omega == 1):
             ax2.plot(maxDiffHist_SOR, label=f"$\\omega = ${omega:.2f} (Gauss-Seidel)")
@@ -107,7 +162,7 @@ def questionI():
 
     return
 
-questionI()
+questionH()
 
 
 
