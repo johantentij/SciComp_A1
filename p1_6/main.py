@@ -6,6 +6,15 @@ grid_size = 50
 tol = 1e-5
 max_iters = 50000
 
+plt.rcParams.update({
+    "font.size": 14,
+    "axes.titlesize": 16,
+    "axes.labelsize": 14,
+    "xtick.labelsize": 12,
+    "ytick.labelsize": 12,
+    "legend.fontsize": 12,
+})
+
 class Grid:
     def __init__(self, N=grid_size):
         self.N = N
@@ -237,10 +246,10 @@ def question_j(gridMin=10, gridMax=200, gridSteps=20):
 def question_k(optimal_omega):
     gridObject = Grid()
 
-    conditions = ['none', 'sink', 'insulator']
-    labels = ['Baseline (No Obstacle)', 'Task K (Sink)', 'Task L (Insulator)']
+    conditions = ['sink', 'insulator']
+    labels = ['Sink', 'Insulator']
 
-    fig, axes = plt.subplots(1, 3, figsize=(16, 5))
+    fig, axes = plt.subplots(1, 2, figsize=(16, 5))
 
     dx = 1 / grid_size
     
@@ -255,16 +264,82 @@ def question_k(optimal_omega):
 
         ax = axes[i]
         im = ax.pcolor(x, y, c.T, cmap="inferno", vmin=0, vmax=1)
-        ax.set_title(f"{labels[i]}\nConverged in {iters} iters")
+        ax.set_title(f"{labels[i]}")
         ax.set_aspect("equal")
+        ax.set_xlabel("$x$")
+        ax.set_ylabel("$y$")
 
         rects = gridObject.getObstaclePlotRects()
         for rect in rects:
             ax.add_patch(rect)
 
-    plt.colorbar(im, ax=axes.ravel().tolist(), fraction=0.02, pad=0.04)
+    cbar = plt.colorbar(im, ax=axes.ravel().tolist(), fraction=0.02, pad=0.04)
+    cbar.set_label("c(x, y)")
 
     # plt.tight_layout()
+    plt.show()
+
+    return
+
+def optimalOmegaSink(N_sizes=20):
+    gridObject = Grid()
+
+    omegas = np.arange(1.7, 2-0.005, 0.005)
+
+    sizes = np.linspace(0, 0.9, N_sizes)
+    optimalOmegas = np.empty(N_sizes)
+    optimalOmegaIterations = np.empty(N_sizes)
+
+    for i, size in enumerate(sizes):
+        print("size:", size)
+        gridObject.removeObstacles()
+        if (size != 0):
+            gridObject.addRectObstacle(
+                (.5 - .5 * size, .5 - .5 * size),
+                (.5 + .5 * size, .5 + .5 * size),
+                obstacleType='sink'
+            )
+
+        iterations = []
+        for w in omegas:
+            _, iters = solve_diffusion(gridObject, grid_size, omega=w)
+            iterations.append(iters)
+
+        optimalOmegas[i] = omegas[np.argmin(iterations)]
+        optimalOmegaIterations[i] = np.min(iterations)
+
+    # ---- Plotting ----
+    fig, ax1 = plt.subplots()
+
+    # First y-axis (left)
+    line1, = ax1.plot(
+        sizes,
+        optimalOmegas,
+        color="tab:blue",
+        label="Optimal $\omega$"
+    )
+    ax1.set_xlabel("Width / Height")
+    ax1.set_ylabel("Optimal $\omega$")
+    ax1.tick_params(axis='y')
+
+    # Second y-axis (right)
+    ax2 = ax1.twinx()
+
+    line2, = ax2.plot(
+        sizes,
+        optimalOmegaIterations,
+        linestyle="--",
+        color="tab:red",
+        label="Iterations until convergence"
+    )
+    ax2.set_ylabel("Iterations until convergence")
+    ax2.tick_params(axis='y')
+
+    # Combine legends
+    lines = [line1, line2]
+    labels = [line.get_label() for line in lines]
+    ax1.legend(lines, labels, loc="best")
+
     plt.show()
 
     return
@@ -304,6 +379,7 @@ def insulatorMazeTest(N=grid_size):
     
 if __name__ == "__main__":
     # best_omega = question_j()
-    # question_k(1.91)
+    question_k(1.91)
 
-    insulatorMazeTest()
+    # insulatorMazeTest()
+    optimalOmegaSink()
