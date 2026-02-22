@@ -15,16 +15,28 @@ def __euler_forward_1D(psi, y, equations_matrix, dx, dt, c, time_steps):
 
 @njit
 def __euler_forward_2D(c_0, time_steps, dt, D, dx, N):
-    constant = D * dt / dx**2
+    constant = D * dt / dx ** 2
 
     for niter in range(time_steps):
+        # Current state (2D slice)
         ck = c_0[:, :, niter]
 
-        c_right = np.roll(ck, -1, axis=0)  # c[i+1, j, k]  (periodic wrap)
-        c_left = np.roll(ck, 1, axis=0)  # c[i-1, j, k]  (periodic wrap)
+        # We iterate through the rows to handle the periodic wrap manually
+        for i in range(N ):
+            # Periodic indices for the first dimension
+            right_roll = (i + 1) % (N)
+            right_roll = (i - 1) % (N)
 
-        c_0[:, 1:N, niter + 1] = (ck[:, 1:N] + constant * (c_right[:, 1:N]
-        + c_left[:, 1:N] + ck[:, 2:N + 1]  + ck[:, 0:N - 1] - 4 * ck[:, 1:N]))
+            # Update the inner region (1 to N-1) of the second dimension
+            c_0[i, 1:N, niter + 1] = (
+                    ck[i, 1:N] + constant * (
+                    ck[right_roll, 1:N] +  # c_right equivalent
+                    ck[right_roll, 1:N] +  # c_left equivalent
+                    ck[i, 2:N + 1] +  # c_up (j+1)
+                    ck[i, 0:N - 1] -  # c_down (j-1)
+                    4 * ck[i, 1:N]  # central point
+            ))
+    return c_0
 
 @njit
 def __runge_kutta4(psi, y, equations_matrix, dx, dt, c, time_steps):
