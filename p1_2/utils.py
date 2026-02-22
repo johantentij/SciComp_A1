@@ -1,8 +1,23 @@
 import numpy as np
-from p1_1.euler_methods import approx_heat
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from scipy.special import erfc
+import os
+import sys
+
+current_dir = os.path.dirname(os.path.abspath(__file__))
+p1_1_path = os.path.join(current_dir, '..', 'p1_1')
+
+if p1_1_path not in sys.path:
+    sys.path.insert(0, p1_1_path)
+
+try:
+    import euler_methods
+    from euler_methods import approx_heat
+    print("succeeded")
+except ImportError as e:
+    print("failed")
+
 
 D  = 1.0       # diffusion constant
 N  = 50        # number of intervals (grid: (N+1) x (N+1))
